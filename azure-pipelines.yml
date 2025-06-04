@@ -19,10 +19,15 @@ jobs:
           publishJUnitResults: true
           testResultsFiles: '**/surefire-reports/TEST-*.xml'
 
+      - script: |
+          echo "=== DEBUG: conteúdo de demo/target ==="
+          ls demo/target
+        displayName: 'Debug – Listar demo/target'
+
       - task: CopyFiles@2
         displayName: 'Copiar JAR para ArtifactStagingDirectory'
         inputs:
-          contents: 'demo/target/*.jar'          # verifique se aqui bate com o local exato do .jar
+          contents: 'demo/target/*.jar'
           targetFolder: '$(Build.ArtifactStagingDirectory)'
 
       - task: PublishBuildArtifacts@1
@@ -37,15 +42,14 @@ jobs:
     steps:
       - download: current
 
-      # Passo de debug para confirmar onde o JAR está após o download
       - script: |
-          echo "=== Debug: $(Pipeline.Workspace) ==="
+          echo "===== DEBUG: conteúdo de $(Pipeline.Workspace) ====="
           ls -R $(Pipeline.Workspace)
-        displayName: 'Debug – Listar $(Pipeline.Workspace)'
+        displayName: 'Debug – listar $(Pipeline.Workspace)'
 
       - task: AzureWebApp@1
         displayName: 'Deploy no Azure Web App'
         inputs:
           azureSubscription: 'AzureConnection'
           appName: 'gs-app'
-          package: '$(Pipeline.Workspace)/drop/*.jar'
+          package: '$(Pipeline.Workspace)/drop/demo/target/*.jar'
