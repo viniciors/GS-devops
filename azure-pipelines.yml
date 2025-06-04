@@ -1,0 +1,46 @@
+trigger:
+  - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  artifactName: 'drop'
+
+jobs:
+  - job: Build
+    displayName: 'Build and publish JAR'
+    steps:
+      - task: Maven@3
+        displayName: 'Executar mvn clean package'
+        inputs:
+          mavenPomFile: 'demo/pom.xml'
+          goals: 'clean package'
+          publishJUnitResults: true
+          testResultsFiles: '**/surefire-reports/TEST-*.xml'
+
+      - task: CopyFiles@2
+        displayName: 'Copiar JAR para ArtifactStagingDirectory'
+        inputs:
+          contents: 'demo/target/*.jar'
+          targetFolder: '$(Build.ArtifactStagingDirectory)'
+
+      - task: PublishBuildArtifacts@1
+        displayName: 'Publicar artifact'
+        inputs:
+          pathToPublish: '$(Build.ArtifactStagingDirectory)'
+          artifactName: '$(artifactName)'
+
+  - job: Deploy
+    displayName: 'Deploy to Azure App Service'
+    dependsOn: Build
+    steps:
+      - download: current
+      - script: ls -R $(Pipeline.Workspace)
+
+      - task: AzureWebApp@1
+        displayName: 'Deploy no Azure Web App'
+        inputs:
+          azureSubscription: 'AzureConnection'      # nome da sua Service Connection
+          appName: 'gs-app'                    # nome do seu App Service no Azure
+          package: '$(Pipeline.Workspace)/drop/*.jar'
