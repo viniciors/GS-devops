@@ -9,24 +9,22 @@ variables:
 
 jobs:
   - job: Build
-    displayName: 'Build and publish JAR'
+    displayName: 'Build and publish WAR'
     steps:
-      - task: Maven@3
-        displayName: 'Executar mvn clean package'
+      - task: Gradle@3
         inputs:
-          mavenPomFile: 'demo/pom.xml'
-          goals: 'clean package'
+          workingDirectory: 'spring-mvc-fiap'
+          gradleWrapperFile: 'spring-mvc-fiap/gradlew'
+          tasks: 'clean build'
           publishJUnitResults: true
-          testResultsFiles: '**/surefire-reports/TEST-*.xml'
+          testResultsFiles: '**/TEST-*.xml'
 
       - task: CopyFiles@2
-        displayName: 'Copiar JAR para ArtifactStagingDirectory'
         inputs:
-          contents: 'demo/target/*.jar'
+          contents: '**/build/libs/ROOT.war'
           targetFolder: '$(Build.ArtifactStagingDirectory)'
 
       - task: PublishBuildArtifacts@1
-        displayName: 'Publicar artifact'
         inputs:
           pathToPublish: '$(Build.ArtifactStagingDirectory)'
           artifactName: '$(artifactName)'
@@ -35,12 +33,19 @@ jobs:
     displayName: 'Deploy to Azure App Service'
     dependsOn: Build
     steps:
+      # 1) Baixa os artefatos publicados no job Build
       - download: current
-      - script: ls -R $(Pipeline.Workspace)
 
+      # 2) Lista tudo dentro de Pipeline.Workspace para confirmar a estrutura
+      - script: |
+          echo "Listando Workspace inteiro:"
+          ls -R $(Pipeline.Workspace)
+        displayName: 'Debug – listar diretórios'
+
+      # 3) Deploy apontando para o .war que está dentro de drop
       - task: AzureWebApp@1
-        displayName: 'Deploy no Azure Web App'
         inputs:
-          azureSubscription: 'AzureConnection'      # nome da sua Service Connection
-          appName: 'gs-app'                    # nome do seu App Service no Azure
-          package: '$(Pipeline.Workspace)/drop/*.jar'
+          azureSubscription: 'AzureConnection'
+          appType: 'webAppLinux'
+          appName: 'nome-do-seu-app'
+          package: '$(Pipeline.Workspace)/drop/*.war'
