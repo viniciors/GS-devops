@@ -9,22 +9,24 @@ variables:
 
 jobs:
   - job: Build
-    displayName: 'Build and publish WAR'
+    displayName: 'Build and publish JAR'
     steps:
-      - task: Gradle@3
+      - task: Maven@3
+        displayName: 'Executar mvn clean package'
         inputs:
-          workingDirectory: 'spring-mvc-fiap'
-          gradleWrapperFile: 'spring-mvc-fiap/gradlew'
-          tasks: 'clean build'
+          mavenPomFile: 'demo/pom.xml'
+          goals: 'clean package'
           publishJUnitResults: true
-          testResultsFiles: '**/TEST-*.xml'
+          testResultsFiles: '**/surefire-reports/TEST-*.xml'
 
       - task: CopyFiles@2
+        displayName: 'Copiar JAR para ArtifactStagingDirectory'
         inputs:
-          contents: '**/build/libs/ROOT.war'
+          contents: 'demo/target/*.jar'          # verifique se aqui bate com o local exato do .jar
           targetFolder: '$(Build.ArtifactStagingDirectory)'
 
       - task: PublishBuildArtifacts@1
+        displayName: 'Publicar artifact'
         inputs:
           pathToPublish: '$(Build.ArtifactStagingDirectory)'
           artifactName: '$(artifactName)'
@@ -33,19 +35,17 @@ jobs:
     displayName: 'Deploy to Azure App Service'
     dependsOn: Build
     steps:
-      # 1) Baixa os artefatos publicados no job Build
       - download: current
 
-      # 2) Lista tudo dentro de Pipeline.Workspace para confirmar a estrutura
+      # Passo de debug para confirmar onde o JAR está após o download
       - script: |
-          echo "Listando Workspace inteiro:"
+          echo "=== Debug: $(Pipeline.Workspace) ==="
           ls -R $(Pipeline.Workspace)
-        displayName: 'Debug – listar diretórios'
+        displayName: 'Debug – Listar $(Pipeline.Workspace)'
 
-      # 3) Deploy apontando para o .war que está dentro de drop
       - task: AzureWebApp@1
+        displayName: 'Deploy no Azure Web App'
         inputs:
           azureSubscription: 'AzureConnection'
-          appType: 'webAppLinux'
-          appName: 'nome-do-seu-app'
-          package: '$(Pipeline.Workspace)/drop/*.war'
+          appName: 'gs-app'
+          package: '$(Pipeline.Workspace)/drop/*.jar'
