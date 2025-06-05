@@ -5,13 +5,23 @@ pool:
   vmImage: 'ubuntu-latest'
 
 variables:
-  azureSubscription: 'AzureConnection'        # Nome da Service Connection no Azure DevOps
-  azureResourceGroup: 'rg-gs-demo'           # Seu resource group
-  azureWebAppName: 'gs-app'                   # Nome exato do App Service
-  azureSqlServer: 'servidor-sqldb-gs-demo'     # Nome do servidor SQL sem ".database.windows.net"
-  azureSqlDatabase: 'sqldb-gs-demo'            # Nome do banco de dados
-  sqlUser: 'adm@servidor-sqldb-gs-demo'        # Usuário completo (já com @servidor)
-  sqlPassword: '@Gs12345'                      # Senha do SQL
+  # Nome do artifact que será publicado
+  artifactName: 'drop'
+
+  # Service Connection do Azure DevOps
+  azureSubscription: 'AzureConnection'        # nome da sua Service Connection
+
+  # Resource Group e App Service
+  azureResourceGroup: 'rg-demo-app'
+  azureWebAppName: 'gs-app'
+
+  # Variáveis do Azure SQL
+  azureSqlServer: 'servidor-sqldb-gs-demo'    # sem “.database.windows.net”
+  azureSqlDatabase: 'sqldb-gs-demo'
+  sqlUser: 'adm@servidor-sqldb-gs-demo'
+  sqlPassword: '@Gs12345'
+
+  # Monta a JDBC URL completa:
   CONNECTION_STRING: >-
     jdbc:sqlserver://$(azureSqlServer).database.windows.net:1433;
     database=$(azureSqlDatabase);
@@ -22,17 +32,17 @@ variables:
     hostNameInCertificate=*.database.windows.net;
     loginTimeout=30;
 
-  artifactName: 'drop'
-
 jobs:
   - job: Build
-    displayName: 'Build e publicar JAR'
+    displayName: 'Build do projeto e publica JAR'
     steps:
       - task: Maven@3
-        displayName: 'mvn clean package'
+        displayName: 'Compilar com Maven'
         inputs:
           mavenPomFile: 'demo/pom.xml'
           goals: 'clean package'
+          javaHomeOption: 'JDKVersion'
+          jdkVersionOption: '1.17'
           publishJUnitResults: true
           testResultsFiles: '**/surefire-reports/TEST-*.xml'
 
@@ -43,20 +53,25 @@ jobs:
           targetFolder: '$(Build.ArtifactStagingDirectory)'
 
       - task: PublishBuildArtifacts@1
-        displayName: 'Publicar artifact'
+        displayName: 'Publicar artefato drop'
         inputs:
           pathToPublish: '$(Build.ArtifactStagingDirectory)'
           artifactName: '$(artifactName)'
+          publishLocation: 'Pipeline'
 
   - job: Deploy
-    displayName: 'Deploy no App Service'
+    displayName: 'Download do artifact e deploy no App Service'
     dependsOn: Build
     steps:
       - download: current
-      - script: ls -R $(Pipeline.Workspace)
+
+      - script: |
+          echo "=== Conteúdo de $(Pipeline.Workspace) ==="
+          ls -R $(Pipeline.Workspace)
+        displayName: 'Listar arquivos em Pipeline.Workspace'
 
       - task: AzureWebApp@1
-        displayName: 'Deploy e configurar Connection String'
+        displayName: 'Deploy do JAR no Azure Web App'
         inputs:
           azureSubscription: '$(azureSubscription)'
           appName: '$(azureWebAppName)'
@@ -65,4 +80,5 @@ jobs:
           appSettings: |
             -WEBSITE_RUN_FROM_PACKAGE 1
           configurationStrings: |
+            # define no App Service uma Connection String chamada "Demosqldb"
             Demosqldb:$(CONNECTION_STRING)
