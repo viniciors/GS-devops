@@ -5,24 +5,36 @@ pool:
   vmImage: 'ubuntu-latest'
 
 variables:
+  azureSubscription: 'AzureConnection'        # Nome da Service Connection no Azure DevOps
+  azureResourceGroup: 'rg-demo-app'           # Seu resource group
+  azureWebAppName: 'gs-app'                   # Nome exato do App Service
+  azureSqlServer: 'servidor-sqldb-gs-demo'     # Nome do servidor SQL sem ".database.windows.net"
+  azureSqlDatabase: 'sqldb-gs-demo'            # Nome do banco de dados
+  sqlUser: 'adm@servidor-sqldb-gs-demo'        # Usuário completo (já com @servidor)
+  sqlPassword: '@Gs12345'                      # Senha do SQL
+  CONNECTION_STRING: >-
+    jdbc:sqlserver://$(azureSqlServer).database.windows.net:1433;
+    database=$(azureSqlDatabase);
+    user=$(sqlUser);
+    password=$(sqlPassword);
+    encrypt=true;
+    trustServerCertificate=false;
+    hostNameInCertificate=*.database.windows.net;
+    loginTimeout=30;
+
   artifactName: 'drop'
 
 jobs:
   - job: Build
-    displayName: 'Build and publish JAR'
+    displayName: 'Build e publicar JAR'
     steps:
       - task: Maven@3
-        displayName: 'Executar mvn clean package'
+        displayName: 'mvn clean package'
         inputs:
           mavenPomFile: 'demo/pom.xml'
           goals: 'clean package'
           publishJUnitResults: true
           testResultsFiles: '**/surefire-reports/TEST-*.xml'
-
-      - script: |
-          echo "=== DEBUG: conteúdo de demo/target ==="
-          ls demo/target
-        displayName: 'Debug – Listar demo/target'
 
       - task: CopyFiles@2
         displayName: 'Copiar JAR para ArtifactStagingDirectory'
@@ -37,19 +49,20 @@ jobs:
           artifactName: '$(artifactName)'
 
   - job: Deploy
-    displayName: 'Deploy to Azure App Service'
+    displayName: 'Deploy no App Service'
     dependsOn: Build
     steps:
       - download: current
-
-      - script: |
-          echo "===== DEBUG: conteúdo de $(Pipeline.Workspace) ====="
-          ls -R $(Pipeline.Workspace)
-        displayName: 'Debug – listar $(Pipeline.Workspace)'
+      - script: ls -R $(Pipeline.Workspace)
 
       - task: AzureWebApp@1
-        displayName: 'Deploy no Azure Web App'
+        displayName: 'Deploy e configurar Connection String'
         inputs:
-          azureSubscription: 'AzureConnection'
-          appName: 'gs-app'
-          package: '$(Pipeline.Workspace)/drop/demo/target/*.jar'
+          azureSubscription: '$(azureSubscription)'
+          appName: '$(azureWebAppName)'
+          resourceGroupName: '$(azureResourceGroup)'
+          package: '$(Pipeline.Workspace)/drop/*.jar'
+          appSettings: |
+            -WEBSITE_RUN_FROM_PACKAGE 1
+          configurationStrings: |
+            Demosqldb:$(CONNECTION_STRING)
