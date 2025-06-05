@@ -12,7 +12,7 @@ variables:
   azureSubscription: 'AzureConnection'        # nome da sua Service Connection
 
   # Resource Group e App Service
-  azureResourceGroup: 'rg-demo-app'
+  azureResourceGroup: 'rg-gs-demo'
   azureWebAppName: 'gs-app'
 
   # Variáveis do Azure SQL
