@@ -9,14 +9,14 @@ variables:
   artifactName: 'drop'
 
   # Service Connection do Azure DevOps
-  azureSubscription: 'AzureConnection'        # nome da sua Service Connection
+  azureSubscription: 'AzureConnection'
 
   # Resource Group e App Service
-  azureResourceGroup: 'rg-gs-demo'
+  azureResourceGroup: 'rg-demo-app'
   azureWebAppName: 'gs-app'
 
   # Variáveis do Azure SQL
-  azureSqlServer: 'servidor-sqldb-gs-demo'    # sem “.database.windows.net”
+  azureSqlServer: 'servidor-sqldb-gs-demo'
   azureSqlDatabase: 'sqldb-gs-demo'
   sqlUser: 'adm@servidor-sqldb-gs-demo'
   sqlPassword: '@Gs12345'
@@ -36,9 +36,11 @@ jobs:
   - job: Build
     displayName: 'Build do projeto e publica JAR'
     steps:
+      # 1) Compilar com Maven apontando diretamente para demo/pom.xml
       - task: Maven@3
-        displayName: 'Compilar com Maven'
+        displayName: 'Compilar com Maven (demo/pom.xml)'
         inputs:
+          # Sem workingDirectory — apontamos o POM em demo/pom.xml
           mavenPomFile: 'demo/pom.xml'
           goals: 'clean package'
           javaHomeOption: 'JDKVersion'
@@ -46,12 +48,26 @@ jobs:
           publishJUnitResults: true
           testResultsFiles: '**/surefire-reports/TEST-*.xml'
 
+      # 2) DEBUG: listar demo/target para verificar se o JAR foi gerado
+      - script: |
+          echo "=== Conteúdo de demo/target ==="
+          ls -l demo/target || echo "(demo/target não encontrado)"
+        displayName: 'DEBUG: Listar demo/target'
+
+      # 3) Copiar o JAR gerado para ArtifactStagingDirectory
       - task: CopyFiles@2
         displayName: 'Copiar JAR para ArtifactStagingDirectory'
         inputs:
           contents: 'demo/target/*.jar'
           targetFolder: '$(Build.ArtifactStagingDirectory)'
 
+      # 4) DEBUG: listar ArtifactStagingDirectory para verificar o JAR copiado
+      - script: |
+          echo "=== Conteúdo de $(Build.ArtifactStagingDirectory) ==="
+          ls -l $(Build.ArtifactStagingDirectory) || echo "(ArtifactStagingDirectory vazio)"
+        displayName: 'DEBUG: Listar $(Build.ArtifactStagingDirectory)'
+
+      # 5) Publicar tudo que estiver em ArtifactStagingDirectory como artifact "drop"
       - task: PublishBuildArtifacts@1
         displayName: 'Publicar artefato drop'
         inputs:
@@ -63,13 +79,16 @@ jobs:
     displayName: 'Download do artifact e deploy no App Service'
     dependsOn: Build
     steps:
+      # 6) Baixar o artifact "drop" criado no Build
       - download: current
 
+      # 7) DEBUG: listar $(Pipeline.Workspace) para ver onde está o JAR
       - script: |
-          echo "=== Conteúdo de $(Pipeline.Workspace) ==="
+          echo "=== Conteúdo de $(Pipeline.Workspace) após download ==="
           ls -R $(Pipeline.Workspace)
-        displayName: 'Listar arquivos em Pipeline.Workspace'
+        displayName: 'DEBUG: Listar $(Pipeline.Workspace)'
 
+      # 8) Deploy no App Service, apontando para o JAR em drop/
       - task: AzureWebApp@1
         displayName: 'Deploy do JAR no Azure Web App'
         inputs:
@@ -80,5 +99,4 @@ jobs:
           appSettings: |
             -WEBSITE_RUN_FROM_PACKAGE 1
           configurationStrings: |
-            # define no App Service uma Connection String chamada "Demosqldb"
             Demosqldb:$(CONNECTION_STRING)
