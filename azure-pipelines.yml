@@ -5,17 +5,20 @@ pool:
   vmImage: 'ubuntu-latest'
 
 variables:
-  artifactName: 'drop'
-
+  # Service Connection do Azure DevOps (criada em Project Settings → Service connections)
   azureSubscription: 'AzureConnection'
+
+  # Grupo de recursos e nome do App Service
   azureResourceGroup: 'rg-gs-demo'
   azureWebAppName: 'gs-app'
 
-  azureSqlServer: 'servidor-sqldb-gs-demo'
+  # Variáveis do Azure SQL
+  azureSqlServer: 'servidor-sqldb-gs-demo'    # sem “.database.windows.net”
   azureSqlDatabase: 'sqldb-gs-demo'
   sqlUser: 'adm@servidor-sqldb-gs-demo'
   sqlPassword: '@Gs12345'
 
+  # Monta a JDBC URL completa para SQL Azure
   CONNECTION_STRING: >-
     jdbc:sqlserver://$(azureSqlServer).database.windows.net:1433;
     database=$(azureSqlDatabase);
@@ -27,14 +30,13 @@ variables:
     loginTimeout=30;
 
 jobs:
-  - job: Build
-    displayName: 'Build e publica JAR'
+  - job: BuildAndDeploy
+    displayName: 'Build com Maven e Deploy no App Service'
     steps:
-      # 1) Rode o Maven apontando para o pom.xml dentro de s/demo
+      # 1) Compilar o projeto Spring Boot (pom.xml em s/demo)
       - task: Maven@3
-        displayName: 'Compilar projeto (demo/pom.xml)'
+        displayName: 'Compilar com Maven (demo/pom.xml)'
         inputs:
-          # Por padrão, workingDirectory = $(Build.SourcesDirectory) = /home/vsts/work/1/s
           mavenPomFile: 'demo/pom.xml'
           goals: 'clean package'
           javaHomeOption: 'JDKVersion'
@@ -42,56 +44,21 @@ jobs:
           publishJUnitResults: true
           testResultsFiles: '**/surefire-reports/TEST-*.xml'
 
-      # 2) Debug: listar demo/target para confirmar que o JAR foi gerado
+      # 2) DEBUG: listar demo/target para confirmar o JAR
       - script: |
           echo "=== Conteúdo de $(Build.SourcesDirectory)/demo/target ==="
           ls -l $(Build.SourcesDirectory)/demo/target || echo "(vazio)"
         displayName: 'DEBUG: Listar demo/target'
 
-      # 3) Copiar do local correto (s/demo/target/*.jar) para ArtifactStagingDirectory
-      - task: CopyFiles@2
-        displayName: 'Copiar JAR para ArtifactStagingDirectory'
-        inputs:
-          # $(Build.SourcesDirectory) equivale a /home/vsts/work/1/s
-          # Dentro dele existe demo/target/*.jar
-          contents: '$(Build.SourcesDirectory)/demo/target/*.jar'
-          targetFolder: '$(Build.ArtifactStagingDirectory)'
-
-      # 4) Debug: listar conteúdo de ArtifactStagingDirectory
-      - script: |
-          echo "=== Conteúdo de ArtifactStagingDirectory ==="
-          ls -l $(Build.ArtifactStagingDirectory) || echo "(vazio)"
-        displayName: 'DEBUG: Listar $(Build.ArtifactStagingDirectory)'
-
-      # 5) Publicar tudo que está em ArtifactStagingDirectory como artifact "drop"
-      - task: PublishBuildArtifacts@1
-        displayName: 'Publicar artefato drop'
-        inputs:
-          pathToPublish: '$(Build.ArtifactStagingDirectory)'
-          artifactName: '$(artifactName)'
-          publishLocation: 'Pipeline'
-
-  - job: Deploy
-    displayName: 'Baixar artifact e deploy no App Service'
-    dependsOn: Build
-    steps:
-      # 6) Baixa o artifact "drop" para $(Pipeline.Workspace)/drop
-      - download: current
-
-      # 7) Debug: listar árvore de $(Pipeline.Workspace) para ver onde está o JAR
-      - script: |
-          echo "=== Conteúdo de $(Pipeline.Workspace) após download ==="
-          ls -R $(Pipeline.Workspace)
-        displayName: 'DEBUG: Listar $(Pipeline.Workspace)'
-
-      # 8) Deploy no App Service, apontando para o JAR dentro de drop/
+      # 3) Deploy direto do JAR em demo/target/*.jar para o App Service
       - task: AzureWebApp@1
-        displayName: 'Deploy do JAR no Azure Web App'
+        displayName: 'Deploy do JAR no App Service'
         inputs:
           azureSubscription: '$(azureSubscription)'
           appName: '$(azureWebAppName)'
           resourceGroupName: '$(azureResourceGroup)'
-          package: '$(Pipeline.Workspace)/drop/*.jar'
+          # aponta diretamente para o .jar gerado por Maven
+          package: 'demo/target/*.jar'
           appSettings: |
             -WEBSITE_RUN_FROM_PACKAGE 1
           configurationStrings: |
