@@ -6,7 +6,7 @@ pool:
 
 variables:
   azureSubscription: 'AzureConnection'        # Nome da Service Connection no Azure DevOps
-  azureResourceGroup: 'rg-demo-app'           # Seu resource group
+  azureResourceGroup: 'rg-gs-demo'           # Seu resource group
   azureWebAppName: 'gs-app'                   # Nome exato do App Service
   azureSqlServer: 'servidor-sqldb-gs-demo'     # Nome do servidor SQL sem ".database.windows.net"
   azureSqlDatabase: 'sqldb-gs-demo'            # Nome do banco de dados
