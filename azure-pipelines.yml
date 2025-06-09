@@ -13,7 +13,7 @@ variables:
   azureWebAppName: 'gs-app'
 
   # Variáveis do Azure SQL
-  azureSqlServer: 'servidor-sqldb-gs-demo'    # sem “.database.windows.net”
+  azureSqlServer: 'server-sqldb-gs-demo'    # sem “.database.windows.net”
   azureSqlDatabase: 'sqldb-gs-demo'
   sqlUser: 'adm@servidor-sqldb-gs-demo'
   sqlPassword: '@Gs12345'
